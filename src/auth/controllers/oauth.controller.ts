@@ -129,19 +129,22 @@ export class OAuthController {
       // Authenticate or create user
       const result = await this.oauthService.authenticateOAuthUser(oauthUser);
 
-      this.logger.log('🍪 [OAUTH] Setting authentication cookies');
-      this.logger.log(`🔑 [OAUTH] Access token length: ${result.access_token?.length}`);
-      this.logger.log(`🔑 [OAUTH] Refresh token length: ${result.refresh_token?.length}`);
-
-      // Set authentication cookies using CookieService
-      this.cookieService.setAuthCookies(res, result.access_token, result.refresh_token);
-
+      this.logger.log('🔑 [OAUTH] Tokens generated, sending in URL for proxy exchange');
       this.logger.log(`✅ [OAUTH] OAuth authentication successful for: ${result.user.email}`);
-      this.logger.log(`🧭 [OAUTH] Redirecting to: ${this.frontendUrl}/api/auth/oauth/callback?oauth=success`);
 
-      // Redirect to frontend OAuth proxy (not directly to callback page)
-      // The proxy will handle cookie forwarding for cross-origin scenarios
-      return res.redirect(`${this.frontendUrl}/api/auth/oauth/callback?oauth=success`);
+      // Instead of setting cookies here (which won't work cross-origin),
+      // send tokens in URL to frontend proxy, which will set them as same-origin cookies
+      const tokensParam = encodeURIComponent(
+        JSON.stringify({
+          access_token: result.access_token,
+          refresh_token: result.refresh_token,
+        })
+      );
+
+      this.logger.log(`🧭 [OAUTH] Redirecting to: ${this.frontendUrl}/api/auth/oauth/callback?oauth=success&tokens=...`);
+
+      // Redirect to frontend OAuth proxy with tokens in URL
+      return res.redirect(`${this.frontendUrl}/api/auth/oauth/callback?oauth=success&tokens=${tokensParam}`);
     } catch (error) {
       this.logger.error('❌ [OAUTH] OAuth callback failed:', error);
       this.logger.error('❌ [OAUTH] Error stack:', error.stack);
