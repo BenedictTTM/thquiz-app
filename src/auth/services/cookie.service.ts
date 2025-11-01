@@ -37,12 +37,16 @@ export class CookieService {
     // Cookie settings based on environment:
     // - Localhost: SameSite=lax, Secure=false (HTTP works)
     // - Production: SameSite=none, Secure=true (HTTPS required for cross-origin)
-    const cookieOptions = {
+    const cookieOptions: any = {
       httpOnly: true,
       secure: !isLocalhost, // false for localhost, true for production
       sameSite: isLocalhost ? ('lax' as const) : ('none' as const),
       path: '/',
     };
+    
+    // Don't set domain for localhost, but DO NOT set it for production either
+    // Setting domain can cause issues with cross-origin cookies
+    // Browser will automatically use the response domain (sellr-backend-1.onrender.com)
     
     this.logger.log('🍪 [COOKIE] Cookie options:', cookieOptions);
     

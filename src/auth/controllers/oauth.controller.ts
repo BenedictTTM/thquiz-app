@@ -121,7 +121,7 @@ export class OAuthController {
 
       if (!oauthUser) {
         this.logger.warn('❌ [OAUTH] No user data in OAuth callback');
-        return res.redirect(`${this.frontendUrl}/auth/oauth-callback?message=Authentication failed`);
+        return res.redirect(`${this.frontendUrl}/api/auth/oauth/callback?message=Authentication failed`);
       }
 
       this.logger.log(`🔍 [OAUTH] Processing OAuth user: ${oauthUser.email}`);
@@ -137,19 +137,20 @@ export class OAuthController {
       this.cookieService.setAuthCookies(res, result.access_token, result.refresh_token);
 
       this.logger.log(`✅ [OAUTH] OAuth authentication successful for: ${result.user.email}`);
-      this.logger.log(`🧭 [OAUTH] Redirecting to: ${this.frontendUrl}/auth/oauth-callback?oauth=success`);
+      this.logger.log(`🧭 [OAUTH] Redirecting to: ${this.frontendUrl}/api/auth/oauth/callback?oauth=success`);
 
-      // Redirect to frontend OAuth callback page with success status
-      return res.redirect(`${this.frontendUrl}/auth/oauth-callback?oauth=success`);
+      // Redirect to frontend OAuth proxy (not directly to callback page)
+      // The proxy will handle cookie forwarding for cross-origin scenarios
+      return res.redirect(`${this.frontendUrl}/api/auth/oauth/callback?oauth=success`);
     } catch (error) {
       this.logger.error('❌ [OAUTH] OAuth callback failed:', error);
       this.logger.error('❌ [OAUTH] Error stack:', error.stack);
 
-      // Redirect to frontend OAuth callback with error
+      // Redirect to frontend OAuth proxy with error
       const errorMessage = encodeURIComponent(
         error.message || 'Authentication failed'
       );
-      return res.redirect(`${this.frontendUrl}/auth/oauth-callback?message=${errorMessage}`);
+      return res.redirect(`${this.frontendUrl}/api/auth/oauth/callback?message=${errorMessage}`);
     }
   }
 
