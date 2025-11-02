@@ -3,9 +3,10 @@ import {
   NotFoundException,
   BadRequestException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AddToCartDto, UpdateCartItemDto } from './dto';
+import { AddToCartDto, UpdateCartItemDto, MergeCartDto } from './dto';
 
 /**
  * CartService
@@ -18,6 +19,8 @@ import { AddToCartDto, UpdateCartItemDto } from './dto';
  */
 @Injectable()
 export class CartService {
+  private readonly logger = new Logger(CartService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   /**
@@ -397,6 +400,260 @@ export class CartService {
     } catch (error) {
       throw new InternalServerErrorException(
         'Failed to get cart item count',
+        error.message,
+      );
+    }
+  }
+
+  /**
+   * Merge anonymous cart items with authenticated user's cart.
+   * 
+   * Called after user login/signup to preserve cart items added while anonymous.
+   * Intelligently combines quantities for duplicate products.
+   * Validates product existence and stock availability for all items.
+   * Uses database transaction to ensure atomicity.
+   * 
+   * Merge Logic:
+   * - If product already in user cart: Add quantities together
+   * - If product not in cart: Add as new item
+   * - Validates stock availability for final quantities
+   * - All operations are atomic (succeed or fail together)
+   * 
+   * @param userId - The authenticated user's ID
+   * @param mergeCartDto - Array of cart items from local storage
+   * @returns The merged cart with all items and updated totals
+   * @throws {NotFoundException} If any product doesn't exist
+   * @throws {BadRequestException} If insufficient stock for any item
+   * @throws {InternalServerErrorException} If database operation fails
+   * 
+   * @example
+   * ```typescript
+   * // User had 2 items in anonymous cart, logs in, and cart has 1 existing item
+   * const mergedCart = await cartService.mergeCart(1, {
+   *   items: [
+   *     { productId: 1, quantity: 2 },
+   *     { productId: 5, quantity: 1 }
+   *   ]
+   * });
+   * // Result: Cart with 3 items total (existing + new)
+   * ```
+   */
+  async mergeCart(userId: number, mergeCartDto: MergeCartDto) {
+    const { items } = mergeCartDto;
+
+    this.logger.log(`🔄 Starting cart merge for user ${userId} with ${items.length} items`);
+
+    try {
+      // Use transaction to ensure all operations succeed or fail together
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Step 1: Get or create user's cart
+        let cart = await tx.cart.findUnique({
+          where: { userId },
+          include: {
+            items: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    title: true,
+                    stock: true,
+                    originalPrice: true,
+                    discountedPrice: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        if (!cart) {
+          this.logger.log(`📦 Creating new cart for user ${userId}`);
+          cart = await tx.cart.create({
+            data: { userId },
+            include: {
+              items: {
+                include: {
+                  product: {
+                    select: {
+                      id: true,
+                      title: true,
+                      stock: true,
+                      originalPrice: true,
+                      discountedPrice: true,
+                    },
+                  },
+                },
+              },
+            },
+          });
+        } else {
+          this.logger.log(`📦 Found existing cart ${cart.id} with ${cart.items.length} items`);
+        }
+
+        // Step 2: Validate all products exist and have sufficient stock
+        const productIds = items.map((item) => item.productId);
+        const products = await tx.product.findMany({
+          where: {
+            id: { in: productIds },
+          },
+          select: {
+            id: true,
+            title: true,
+            stock: true,
+            originalPrice: true,
+            discountedPrice: true,
+          },
+        });
+
+        // Check if all products exist
+        if (products.length !== items.length) {
+          const foundIds = products.map((p) => p.id);
+          const missingIds = productIds.filter((id) => !foundIds.includes(id));
+          this.logger.error(`❌ Products not found: ${missingIds.join(', ')}`);
+          throw new NotFoundException(
+            `Products not found: ${missingIds.join(', ')}`,
+          );
+        }
+
+        // Create a map for quick product lookup
+        const productMap = new Map(products.map((p) => [p.id, p]));
+
+        // Step 3: Process each item from anonymous cart
+        const mergeResults: Array<{
+          productId: number;
+          action: 'added' | 'updated';
+          oldQuantity?: number;
+          newQuantity?: number;
+          quantity?: number;
+        }> = [];
+
+        for (const item of items) {
+          const product = productMap.get(item.productId);
+          
+          if (!product) {
+            throw new NotFoundException(
+              `Product with ID ${item.productId} not found`,
+            );
+          }
+
+          // Check if product already exists in user's cart
+          const existingCartItem = cart.items.find(
+            (cartItem) => cartItem.product.id === item.productId,
+          );
+
+          if (existingCartItem) {
+            // Product exists: Merge quantities
+            const newQuantity = existingCartItem.quantity + item.quantity;
+
+            // Validate stock for combined quantity
+            if (product.stock < newQuantity) {
+              this.logger.error(
+                `❌ Insufficient stock for ${product.title}: requested ${newQuantity}, available ${product.stock}`,
+              );
+              throw new BadRequestException(
+                `Insufficient stock for "${product.title}". ` +
+                `You already have ${existingCartItem.quantity} in cart, ` +
+                `trying to add ${item.quantity} more, ` +
+                `but only ${product.stock} available in total.`,
+              );
+            }
+
+            // Update existing cart item
+            await tx.cartItem.update({
+              where: { id: existingCartItem.id },
+              data: { quantity: newQuantity },
+            });
+
+            this.logger.log(
+              `✏️ Updated product ${product.id}: ${existingCartItem.quantity} → ${newQuantity}`,
+            );
+
+            mergeResults.push({
+              productId: product.id,
+              action: 'updated',
+              oldQuantity: existingCartItem.quantity,
+              newQuantity,
+            });
+          } else {
+            // Product doesn't exist: Add as new item
+            
+            // Validate stock for new item
+            if (product.stock < item.quantity) {
+              this.logger.error(
+                `❌ Insufficient stock for ${product.title}: requested ${item.quantity}, available ${product.stock}`,
+              );
+              throw new BadRequestException(
+                `Insufficient stock for "${product.title}". ` +
+                `Requested ${item.quantity}, but only ${product.stock} available.`,
+              );
+            }
+
+            // Create new cart item
+            await tx.cartItem.create({
+              data: {
+                cartId: cart.id,
+                productId: item.productId,
+                quantity: item.quantity,
+              },
+            });
+
+            this.logger.log(
+              `➕ Added new product ${product.id} with quantity ${item.quantity}`,
+            );
+
+            mergeResults.push({
+              productId: product.id,
+              action: 'added',
+              quantity: item.quantity,
+            });
+          }
+        }
+
+        // Log merge summary
+        const addedCount = mergeResults.filter((r) => r.action === 'added').length;
+        const updatedCount = mergeResults.filter((r) => r.action === 'updated').length;
+        this.logger.log(
+          `✅ Merge complete: ${addedCount} items added, ${updatedCount} items updated`,
+        );
+
+        // Step 4: Fetch and return the complete merged cart
+        return tx.cart.findUnique({
+          where: { id: cart.id },
+          include: {
+            items: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    title: true,
+                    description: true,
+                    originalPrice: true,
+                    discountedPrice: true,
+                    imageUrl: true,
+                    stock: true,
+                    condition: true,
+                    category: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+      });
+
+      this.logger.log(`🎉 Cart merge successful for user ${userId}`);
+      return this.formatCartResponse(result);
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      
+      this.logger.error(`💥 Cart merge failed for user ${userId}:`, error.message);
+      throw new InternalServerErrorException(
+        'Failed to merge cart',
         error.message,
       );
     }

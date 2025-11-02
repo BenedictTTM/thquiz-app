@@ -1,0 +1,405 @@
+{
+  "info": {
+    "name": "Sellr - Cart API Testing",
+    "description": "Complete test collection for cart endpoints including merge functionality",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "YOUR_JWT_TOKEN_HERE",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Add to Cart",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": 1,\n  \"quantity\": 2\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/cart",
+          "host": ["{{baseUrl}}"],
+          "path": ["cart"]
+        },
+        "description": "Add a product to cart. Creates cart if user doesn't have one."
+      }
+    },
+    {
+      "name": "2. Get Cart",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/cart",
+          "host": ["{{baseUrl}}"],
+          "path": ["cart"]
+        },
+        "description": "Get user's cart with all items and totals"
+      }
+    },
+    {
+      "name": "3. Get Cart Item Count",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/cart/count",
+          "host": ["{{baseUrl}}"],
+          "path": ["cart", "count"]
+        },
+        "description": "Get total item count for header badge"
+      }
+    },
+    {
+      "name": "4. Merge Cart - Basic",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"quantity\": 2\n    },\n    {\n      \"productId\": 2,\n      \"quantity\": 1\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/cart/merge",
+          "host": ["{{baseUrl}}"],
+          "path": ["cart", "merge"]
+        },
+        "description": "Merge anonymous cart items with user cart (basic test with 2 items)"
+      }
+    },
+    {
+      "name": "5. Merge Cart - Single Item",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"quantity\": 3\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/cart/merge",
+          "host": ["{{baseUrl}}"],
+          "path": ["cart", "merge"]
+        },
+        "description": "Merge single item (will combine if already in cart)"
+      }
+    },
+    {
+      "name": "6. Merge Cart - Multiple Items",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"quantity\": 1\n    },\n    {\n      \"productId\": 2,\n      \"quantity\": 2\n    },\n    {\n      \"productId\": 3,\n      \"quantity\": 1\n    },\n    {\n      \"productId\": 4,\n      \"quantity\": 3\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/cart/merge",
+          "host": ["{{baseUrl}}"],
+          "path": ["cart", "merge"]
+        },
+        "description": "Merge multiple items at once"
+      }
+    },
+    {
+      "name": "7. Update Cart Item",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"quantity\": 5\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/cart/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["cart", "1"]
+        },
+        "description": "Update quantity of cart item (replace '1' with actual cart item ID)"
+      }
+    },
+    {
+      "name": "8. Remove Cart Item",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/cart/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["cart", "1"]
+        },
+        "description": "Remove specific item from cart (replace '1' with actual cart item ID)"
+      }
+    },
+    {
+      "name": "9. Clear Cart",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/cart",
+          "host": ["{{baseUrl}}"],
+          "path": ["cart"]
+        },
+        "description": "Clear all items from cart"
+      }
+    },
+    {
+      "name": "Error Tests",
+      "item": [
+        {
+          "name": "Merge - Empty Items Array",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cart/merge",
+              "host": ["{{baseUrl}}"],
+              "path": ["cart", "merge"]
+            },
+            "description": "Should return 400 - At least one item required"
+          }
+        },
+        {
+          "name": "Merge - Invalid Quantity (Zero)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"quantity\": 0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cart/merge",
+              "host": ["{{baseUrl}}"],
+              "path": ["cart", "merge"]
+            },
+            "description": "Should return 400 - Quantity must be at least 1"
+          }
+        },
+        {
+          "name": "Merge - Invalid Quantity (Negative)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"quantity\": -5\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cart/merge",
+              "host": ["{{baseUrl}}"],
+              "path": ["cart", "merge"]
+            },
+            "description": "Should return 400 - Quantity must be at least 1"
+          }
+        },
+        {
+          "name": "Merge - Invalid Product ID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"productId\": -1,\n      \"quantity\": 1\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cart/merge",
+              "host": ["{{baseUrl}}"],
+              "path": ["cart", "merge"]
+            },
+            "description": "Should return 400 - Product ID must be positive"
+          }
+        },
+        {
+          "name": "Merge - Product Not Found",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"productId\": 99999,\n      \"quantity\": 1\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cart/merge",
+              "host": ["{{baseUrl}}"],
+              "path": ["cart", "merge"]
+            },
+            "description": "Should return 404 - Product not found"
+          }
+        },
+        {
+          "name": "Merge - No Authorization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"productId\": 1,\n      \"quantity\": 1\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/cart/merge",
+              "host": ["{{baseUrl}}"],
+              "path": ["cart", "merge"]
+            },
+            "description": "Should return 401 - Unauthorized"
+          }
+        }
+      ]
+    }
+  ]
+}

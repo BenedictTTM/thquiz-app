@@ -13,7 +13,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { CartService } from './cart.service';
-import { AddToCartDto, UpdateCartItemDto } from './dto';
+import { AddToCartDto, UpdateCartItemDto, MergeCartDto } from './dto';
 import { AuthGuard } from '../guards/auth.guard';
 
 /**
@@ -124,6 +124,66 @@ export class CartController {
     const userId = req.user.id;
     const count = await this.cartService.getCartItemCount(userId);
     return { count };
+  }
+
+  /**
+   * Merge anonymous cart items with authenticated user's cart.
+   * 
+   * Called after user login/signup to preserve cart items added while browsing as guest.
+   * Intelligently combines quantities for products already in cart.
+   * Validates product existence and stock availability.
+   * All operations are atomic (succeed or fail together).
+   * 
+   * Merge Behavior:
+   * - Existing product in cart: Adds quantities together
+   * - New product: Adds as new cart item
+   * - Validates stock for all final quantities
+   * - Returns complete merged cart
+   * 
+   * @route POST /cart/merge
+   * @access Private (requires authentication)
+   * @param req - Express request object with authenticated user
+   * @param mergeCartDto - Array of cart items from local storage
+   * @returns 200 - Merged cart with all items and updated totals
+   * @returns 400 - Bad request (invalid data or insufficient stock)
+   * @returns 401 - Unauthorized (not authenticated)
+   * @returns 404 - One or more products not found
+   * 
+   * @example
+   * POST /cart/merge
+   * Body: {
+   *   "items": [
+   *     { "productId": 1, "quantity": 2 },
+   *     { "productId": 5, "quantity": 1 }
+   *   ]
+   * }
+   * 
+   * Response: {
+   *   "id": 1,
+   *   "userId": 42,
+   *   "items": [
+   *     {
+   *       "id": 1,
+   *       "quantity": 3,  // Combined 1 existing + 2 new
+   *       "product": {...},
+   *       "itemTotal": 89.97
+   *     },
+   *     {
+   *       "id": 2,
+   *       "quantity": 1,  // New item
+   *       "product": {...},
+   *       "itemTotal": 29.99
+   *     }
+   *   ],
+   *   "subtotal": 119.96,
+   *   "totalItems": 4
+   * }
+   */
+  @Post('merge')
+  @HttpCode(HttpStatus.OK)
+  async mergeCart(@Req() req: any, @Body() mergeCartDto: MergeCartDto) {
+    const userId = req.user.id;
+    return this.cartService.mergeCart(userId, mergeCartDto);
   }
 
   /**
