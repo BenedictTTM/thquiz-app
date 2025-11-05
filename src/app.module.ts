@@ -10,6 +10,7 @@ import { CartModule } from './cart/cart.module';
 import { MeiliSearchModule } from './meilisearch/meilisearch.module';
 import { PaymentModule } from './payment/payment.module';
 import { SlotModule } from './slot/slot.module';
+import { OrderModule } from './order/order.module';
 
 @Module({
   imports: [
@@ -27,6 +28,8 @@ import { SlotModule } from './slot/slot.module';
     PaymentModule,
     // Slot management
     SlotModule,
+    // Orders
+    OrderModule,
   ],
 })
 export class AppModule {}

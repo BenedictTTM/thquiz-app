@@ -40,6 +40,8 @@ model User {
   products             Product[]
   reports              Report[]
   reviews              Review[]    @relation("ReviewerReviews")
+  buyerOrders          Order[]     @relation("BuyerOrders")
+  sellerOrders         Order[]     @relation("SellerOrders")
 
   @@index([createdAt])
   @@index([premiumTier])
@@ -74,6 +76,7 @@ model Product {
   images           ProductImage[]
   reports          Report[]
   reviews          Review[]
+  orderItems       OrderItem[]
 
   @@index([userId])
   @@index([averageRating])
@@ -173,6 +176,54 @@ model CartItem {
   @@index([productId])
 }
 
+// Orders: capture purchase details and buyer contact snapshot at checkout
+model Order {
+  id             Int          @id @default(autoincrement())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // participants
+  buyerId        Int
+  sellerId       Int
+  buyer          User         @relation("BuyerOrders", fields: [buyerId], references: [id])
+  seller         User         @relation("SellerOrders", fields: [sellerId], references: [id])
+
+  // checkout-time contact info (snapshot)
+  whatsappNumber String?
+  callNumber     String?
+  hall           String?
+  buyerMessage   String?
+
+  // accounting
+  status         OrderStatus  @default(PENDING)
+  currency       String       @default("GHS")
+  totalAmount    Float
+
+  items          OrderItem[]
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  productId   Int
+  quantity    Int      @default(1)
+  unitPrice   Float
+  productName String?
+
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id])
+
+  @@unique([orderId, productId])
+  @@index([productId])
+}
+
+
+
 enum PremiumTier {
   FREE
   BASIC
@@ -184,4 +235,11 @@ enum Role {
   USER
   ADMIN
   MODERATOR
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
 }

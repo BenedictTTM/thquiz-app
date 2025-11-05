@@ -244,13 +244,6 @@ export class CartService {
         throw new NotFoundException('Cart item not found');
       }
 
-      // Validate stock
-      if (cartItem.product.stock < quantity) {
-        throw new BadRequestException(
-          `Insufficient stock for ${cartItem.product.title}. Only ${cartItem.product.stock} items available`,
-        );
-      }
-
       // Update quantity
       await this.prisma.cartItem.update({
         where: { id: itemId },
