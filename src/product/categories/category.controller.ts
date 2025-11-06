@@ -37,7 +37,7 @@ export class CategoryController {
   async getProductsByCategory(
     @Param('category') category: string,
     @Query() queryParams: Omit<GetProductsByCategoryDto, 'category'>,
-  ): Promise<CategoryProductsResponseDto> {
+  ): Promise<{ success: boolean } & CategoryProductsResponseDto> {
     // Validate category is a valid enum value
     const validCategories = Object.values(ProductCategory);
     if (!validCategories.includes(category as ProductCategory)) {
@@ -51,7 +51,12 @@ export class CategoryController {
       ...queryParams,
     };
 
-    return await this.categoryProductsService.getProductsByCategory(dto);
+    const result = await this.categoryProductsService.getProductsByCategory(dto);
+    
+    return {
+      success: true,
+      ...result,
+    };
   }
 
   /**
@@ -64,7 +69,12 @@ export class CategoryController {
   @Get('all/list')
   @HttpCode(HttpStatus.OK)
   async getAllCategories() {
-    return await this.categoryProductsService.getAllCategoriesWithCounts();
+    const categories = await this.categoryProductsService.getAllCategoriesWithCounts();
+    
+    return {
+      success: true,
+      data: categories,
+    };
   }
 
 

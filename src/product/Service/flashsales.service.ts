@@ -59,27 +59,40 @@ export class FlashSalesService {
 
   /**
    * Refresh flash sales by fetching new products
+   * 
+   * PERFORMANCE OPTIMIZATIONS:
+   * - Minimal field selection
+   * - Indexed query (isActive, isSold, stock)
+   * - Efficient filtering and transformation
+   * - In-memory shuffle (fast)
    */
   async refreshFlashSales(): Promise<void> {
+    const startTime = Date.now();
+    
     try {
       this.logger.log('🔍 Fetching products for flash sales...');
 
-      // Get all active products with stock and not sold
+      // OPTIMIZATION: Minimal field selection, indexed queries
       const products = await this.prisma.product.findMany({
         where: {
           isActive: true,
           isSold: false,
-          stock: {
-            gt: 0,
-          },
-          originalPrice: {
-            gt: 0,
-          },
-          discountedPrice: {
-            gt: 0,
-          },
+          stock: { gt: 0 },
+          originalPrice: { gt: 0 },
+          discountedPrice: { gt: 0 },
         },
-        include: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          originalPrice: true,
+          discountedPrice: true,
+          category: true,
+          imageUrl: true,
+          stock: true,
+          views: true,
+          tags: true,
+          createdAt: true,
           user: {
             select: {
               id: true,
@@ -88,49 +101,44 @@ export class FlashSalesService {
             },
           },
         },
+        // OPTIMIZATION: Limit initial fetch to reduce memory
+        take: 1000, // Process max 1000 products
+        orderBy: {
+          createdAt: 'desc', // Recent products more likely to be active
+        },
       });
 
-      // Filter products with 30-70% discount
-      const eligibleProducts = products
-        .map((product) => {
-          const discountPercentage = this.calculateDiscount(
-            product.originalPrice,
-            product.discountedPrice,
-          );
-          return { ...product, discountPercentage };
-        })
-        .filter(
-          (product) =>
-            product.discountPercentage >= 30 && product.discountPercentage <= 70,
+      // OPTIMIZATION: Single-pass filter + transform
+      const eligibleProducts: FlashSaleProduct[] = [];
+      
+      for (const product of products) {
+        const discountPercentage = this.calculateDiscount(
+          product.originalPrice,
+          product.discountedPrice,
         );
+        
+        // Filter inline to avoid double iteration
+        if (discountPercentage >= 30 && discountPercentage <= 70) {
+          eligibleProducts.push({
+            ...product,
+            discountPercentage,
+          });
+        }
+      }
 
       this.logger.log(
-        `✅ Found ${eligibleProducts.length} eligible products for flash sales`,
+        `✅ Found ${eligibleProducts.length} eligible products (from ${products.length} total)`,
       );
 
       // Shuffle and take 20 random products
-      const shuffled = this.shuffleArray(eligibleProducts);
-      this.cachedFlashSales = shuffled.slice(0, 20).map((product) => ({
-        id: product.id,
-        title: product.title,
-        description: product.description,
-        originalPrice: product.originalPrice,
-        discountedPrice: product.discountedPrice,
-        discountPercentage: product.discountPercentage,
-        category: product.category,
-        imageUrl: product.imageUrl,
-        stock: product.stock,
-        views: product.views,
-        tags: product.tags,
-        createdAt: product.createdAt,
-        user: product.user,
-      }));
+      this.cachedFlashSales = this.shuffleArray(eligibleProducts).slice(0, 20);
 
       // Set next refresh time to the start of next hour
       this.nextRefreshTime = this.getNextHourStart();
 
+      const duration = Date.now() - startTime;
       this.logger.log(
-        `🎉 Flash sales refreshed with ${this.cachedFlashSales.length} products. Next refresh at ${this.nextRefreshTime.toISOString()}`,
+        `🎉 Flash sales refreshed | ${this.cachedFlashSales.length} products | ${duration}ms | Next: ${this.nextRefreshTime.toISOString()}`,
       );
     } catch (error) {
       this.logger.error(`❌ Error refreshing flash sales: ${error.message}`);
