@@ -20,7 +20,6 @@ model User {
   profilePic           String?
   firstName            String?
   lastName             String?
-  storeName            String?
   premiumTier          PremiumTier @default(FREE)
   availableSlots       Int         @default(5)
   usedSlots            Int         @default(0)
@@ -33,19 +32,21 @@ model User {
   passwordResetToken   String?
   refreshToken         String?
   refreshTokenExp      DateTime?
+  storeName            String?
   cart                 Cart?
   receivedMessages     Message[]   @relation("ReceivedMessages")
   sentMessages         Message[]   @relation("SentMessages")
+  buyerOrders          Order[]     @relation("BuyerOrders")
+  sellerOrders         Order[]     @relation("SellerOrders")
   payments             Payment[]
   products             Product[]
   reports              Report[]
   reviews              Review[]    @relation("ReviewerReviews")
-  buyerOrders          Order[]     @relation("BuyerOrders")
-  sellerOrders         Order[]     @relation("SellerOrders")
 
   @@index([createdAt])
   @@index([premiumTier])
   @@index([role])
+  @@index([availableSlots])
 }
 
 model Product {
@@ -72,14 +73,27 @@ model Product {
   userId           Int
   cartItems        CartItem[]
   delivery         Delivery?
+  orderItems       OrderItem[]
   user             User           @relation(fields: [userId], references: [id])
   images           ProductImage[]
   reports          Report[]
   reviews          Review[]
-  orderItems       OrderItem[]
 
+  // Performance indexes for high-traffic queries
   @@index([userId])
   @@index([averageRating])
+  @@index([isActive])
+  @@index([isSold])
+  @@index([stock])
+  @@index([discountedPrice])
+  @@index([isActive, isSold])
+  @@index([isActive, createdAt(sort: Desc)])
+  @@index([category, isActive, isSold])
+  @@index([category, createdAt(sort: Desc)])
+  @@index([category, discountedPrice])
+  @@index([category, views(sort: Desc)])
+  @@index([category, averageRating(sort: Desc)])
+  @@index([userId, isActive])
 }
 
 model ProductImage {
@@ -90,21 +104,21 @@ model ProductImage {
 }
 
 model Payment {
-  id             Int         @id @default(autoincrement())
-  amount         Float
-  currency       String   @default("GHS")
-  status         String      @default("PENDING")
-  transactionId  String?
-  providerPaymentId String?  @unique
-  metadata       Json?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  premiumTier    PremiumTier
-  slotsGranted   Int
-  validityMonths Int
-  paymentType    String      @default("PREMIUM")
-  userId         Int
-  user           User        @relation(fields: [userId], references: [id])
+  id                Int         @id @default(autoincrement())
+  amount            Float
+  currency          String      @default("GHS")
+  status            String      @default("PENDING")
+  transactionId     String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  premiumTier       PremiumTier
+  slotsGranted      Int
+  validityMonths    Int
+  paymentType       String      @default("PREMIUM")
+  userId            Int
+  metadata          Json?
+  providerPaymentId String?     @unique
+  user              User        @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([status])
@@ -176,29 +190,21 @@ model CartItem {
   @@index([productId])
 }
 
-// Orders: capture purchase details and buyer contact snapshot at checkout
 model Order {
-  id             Int          @id @default(autoincrement())
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  // participants
+  id             Int         @id @default(autoincrement())
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
   buyerId        Int
   sellerId       Int
-  buyer          User         @relation("BuyerOrders", fields: [buyerId], references: [id])
-  seller         User         @relation("SellerOrders", fields: [sellerId], references: [id])
-
-  // checkout-time contact info (snapshot)
   whatsappNumber String?
   callNumber     String?
   hall           String?
   buyerMessage   String?
-
-  // accounting
-  status         OrderStatus  @default(PENDING)
-  currency       String       @default("GHS")
+  status         OrderStatus @default(PENDING)
+  currency       String      @default("GHS")
   totalAmount    Float
-
+  buyer          User        @relation("BuyerOrders", fields: [buyerId], references: [id])
+  seller         User        @relation("SellerOrders", fields: [sellerId], references: [id])
   items          OrderItem[]
 
   @@index([buyerId])
@@ -208,21 +214,18 @@ model Order {
 }
 
 model OrderItem {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   orderId     Int
   productId   Int
-  quantity    Int      @default(1)
+  quantity    Int     @default(1)
   unitPrice   Float
   productName String?
-
-  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product     Product  @relation(fields: [productId], references: [id])
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product @relation(fields: [productId], references: [id])
 
   @@unique([orderId, productId])
   @@index([productId])
 }
-
-
 
 enum PremiumTier {
   FREE
