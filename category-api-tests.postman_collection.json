@@ -1,0 +1,543 @@
+{
+  "info": {
+    "name": "Category Products API - Enterprise",
+    "description": "Comprehensive test collection for category-based product retrieval API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "category-products-api-v1",
+    "version": "1.0.0"
+  },
+  "item": [
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "Get All Categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories"]
+            },
+            "description": "Retrieve all available product categories with metadata and product counts"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Category Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/{{category}}/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "{{category}}", "stats"]
+            },
+            "description": "Get comprehensive statistics for a specific category"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Products by Category",
+      "item": [
+        {
+          "name": "Get Clothes - Basic",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"]
+            },
+            "description": "Get all clothes products with default pagination"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Accessories - Basic",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/accessories",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "accessories"]
+            },
+            "description": "Get all accessories with default pagination"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Home Products - Basic",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/home",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "home"]
+            },
+            "description": "Get all home & living products"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Books - Basic",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/books",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "books"]
+            },
+            "description": "Get all books and media"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Sports & Outing - Basic",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/sports_and_outing",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "sports_and_outing"]
+            },
+            "description": "Get all sports and outdoor products"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Others - Basic",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/others",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "others"]
+            },
+            "description": "Get all miscellaneous products"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Pagination",
+      "item": [
+        {
+          "name": "Get Page 1 (20 items)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Page 2 (20 items)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?page=2&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [
+                { "key": "page", "value": "2" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Small Page (5 items)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?page=1&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "5" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Large Page (100 items max)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?page=1&limit=100",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "100" }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sorting",
+      "item": [
+        {
+          "name": "Sort by Newest",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?sortBy=newest",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [{ "key": "sortBy", "value": "newest" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Sort by Oldest",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?sortBy=oldest",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [{ "key": "sortBy", "value": "oldest" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Sort by Price Ascending",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?sortBy=price-asc",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [{ "key": "sortBy", "value": "price-asc" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Sort by Price Descending",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?sortBy=price-desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [{ "key": "sortBy", "value": "price-desc" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Sort by Popular",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?sortBy=popular",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [{ "key": "sortBy", "value": "popular" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Sort by Rating",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?sortBy=rating",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [{ "key": "sortBy", "value": "rating" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Filtering",
+      "item": [
+        {
+          "name": "Filter by Condition - New",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?condition=new",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [{ "key": "condition", "value": "new" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Filter by Price Range",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?minPrice=10&maxPrice=100",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [
+                { "key": "minPrice", "value": "10" },
+                { "key": "maxPrice", "value": "100" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Filter by Minimum Price",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?minPrice=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [{ "key": "minPrice", "value": "50" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Filter by Maximum Price",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?maxPrice=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [{ "key": "maxPrice", "value": "50" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Filter by Stock Availability",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?inStock=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [{ "key": "inStock", "value": "true" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Advanced Queries",
+      "item": [
+        {
+          "name": "Affordable New Items",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?condition=new&maxPrice=50&sortBy=price-asc",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [
+                { "key": "condition", "value": "new" },
+                { "key": "maxPrice", "value": "50" },
+                { "key": "sortBy", "value": "price-asc" }
+              ]
+            },
+            "description": "Get new items under $50, cheapest first"
+          },
+          "response": []
+        },
+        {
+          "name": "Premium Items (High Price, High Rating)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/accessories?minPrice=100&sortBy=rating",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "accessories"],
+              "query": [
+                { "key": "minPrice", "value": "100" },
+                { "key": "sortBy", "value": "rating" }
+              ]
+            },
+            "description": "Get premium accessories over $100, highest rated first"
+          },
+          "response": []
+        },
+        {
+          "name": "Mid-Range Popular Items",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/home?minPrice=20&maxPrice=200&sortBy=popular",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "home"],
+              "query": [
+                { "key": "minPrice", "value": "20" },
+                { "key": "maxPrice", "value": "200" },
+                { "key": "sortBy", "value": "popular" }
+              ]
+            },
+            "description": "Get mid-range home items, most popular first"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Featured Products",
+      "item": [
+        {
+          "name": "Get Featured Clothes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes/featured?limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes", "featured"],
+              "query": [{ "key": "limit", "value": "10" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Featured Accessories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/accessories/featured?limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "accessories", "featured"],
+              "query": [{ "key": "limit", "value": "5" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Error Cases",
+      "item": [
+        {
+          "name": "Invalid Category",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/invalid_category",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "invalid_category"]
+            },
+            "description": "Should return 400 Bad Request"
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid Page Number",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?page=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [{ "key": "page", "value": "0" }]
+            },
+            "description": "Should return validation error"
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid Limit (Too High)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?limit=1000",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [{ "key": "limit", "value": "1000" }]
+            },
+            "description": "Should be capped at 100"
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid Sort Option",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/categories/clothes?sortBy=invalid",
+              "host": ["{{baseUrl}}"],
+              "path": ["products", "categories", "clothes"],
+              "query": [{ "key": "sortBy", "value": "invalid" }]
+            },
+            "description": "Should return validation error"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    {
+      "key": "category",
+      "value": "clothes",
+      "type": "string"
+    }
+  ]
+}
