@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Param, ValidationPipe, UsePipes, HttpStatus, HttpCode } from '@nestjs/common';
+import { Controller, Get, Query, Param, ValidationPipe, UsePipes, HttpStatus, HttpCode, BadRequestException } from '@nestjs/common';
 import { CategoryProductsService } from '../Service/category-products.service';
 import { GetProductsByCategoryDto, CategoryProductsResponseDto, CategoryStatsDto } from '../dto/category.dto';
 import { ProductCategory } from '../categories/category.enum';
@@ -18,19 +18,6 @@ export class CategoryController {
   constructor(private readonly categoryProductsService: CategoryProductsService) {}
 
   /**
-   * Get all available categories with product counts
-   * 
-   * @route GET /products/categories
-   * @access Public
-   * @returns Array of categories with metadata and product counts
-   */
-  @Get()
-  @HttpCode(HttpStatus.OK)
-  async getAllCategories() {
-    return await this.categoryProductsService.getAllCategoriesWithCounts();
-  }
-
-  /**
    * Get products by specific category with filters and pagination
    * 
    * @route GET /products/categories/:category
@@ -48,11 +35,19 @@ export class CategoryController {
   @Get(':category')
   @HttpCode(HttpStatus.OK)
   async getProductsByCategory(
-    @Param('category') category: ProductCategory,
+    @Param('category') category: string,
     @Query() queryParams: Omit<GetProductsByCategoryDto, 'category'>,
   ): Promise<CategoryProductsResponseDto> {
+    // Validate category is a valid enum value
+    const validCategories = Object.values(ProductCategory);
+    if (!validCategories.includes(category as ProductCategory)) {
+      throw new BadRequestException(
+        `Invalid category: ${category}. Must be one of: ${validCategories.join(', ')}`
+      );
+    }
+
     const dto: GetProductsByCategoryDto = {
-      category,
+      category: category as ProductCategory,
       ...queryParams,
     };
 
@@ -60,53 +55,17 @@ export class CategoryController {
   }
 
   /**
-   * Get statistics for a specific category
+   * Get all available categories with product counts
    * 
-   * @route GET /products/categories/:category/stats
+   * @route GET /products/categories/all
    * @access Public
-   * @param category - Category to get stats for
-   * @returns Category statistics including product counts, price ranges, and popular tags
+   * @returns Array of categories with metadata and product counts
    */
-  @Get(':category/stats')
+  @Get('all/list')
   @HttpCode(HttpStatus.OK)
-  async getCategoryStats(@Param('category') category: ProductCategory): Promise<CategoryStatsDto> {
-    return await this.categoryProductsService.getCategoryStats(category);
+  async getAllCategories() {
+    return await this.categoryProductsService.getAllCategoriesWithCounts();
   }
 
-  /**
-   * Get featured products for a category
-   * Products from premium sellers, highly rated, or trending
-   * 
-   * @route GET /products/categories/:category/featured
-   * @access Public
-   * @param category - Category to get featured products from
-   * @query limit - Number of featured products (default: 10, max: 50)
-   * @returns Featured products from the category
-   */
-  @Get(':category/featured')
-  @HttpCode(HttpStatus.OK)
-  async getFeaturedProducts(
-    @Param('category') category: ProductCategory,
-    @Query('limit') limit: number = 10,
-  ) {
-    const dto: GetProductsByCategoryDto = {
-      category,
-      page: 1,
-      limit: Math.min(limit, 50),
-      sortBy: 'popular',
-    };
 
-    const result = await this.categoryProductsService.getProductsByCategory(dto);
-    
-    // Filter for premium sellers and high ratings
-    const featured = result.data.filter(
-      product => product.seller?.premiumTier !== 'FREE' || product.averageRating >= 4.0
-    );
-
-    return {
-      data: featured,
-      category: result.category,
-      total: featured.length,
-    };
-  }
 }
