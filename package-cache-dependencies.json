@@ -1,0 +1,30 @@
+{
+  "name": "backend",
+  "version": "2.0.0",
+  "description": "Enterprise-grade e-commerce backend with advanced search",
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "node dist/main",
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage",
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "redis:start": "docker-compose -f docker-compose.redis.yml up -d",
+    "redis:stop": "docker-compose -f docker-compose.redis.yml down",
+    "redis:logs": "docker-compose -f docker-compose.redis.yml logs -f redis"
+  },
+  "dependencies": {
+    "@nestjs/cache-manager": "^2.1.1",
+    "cache-manager": "^5.2.4",
+    "cache-manager-redis-store": "^3.0.1",
+    "redis": "^4.6.10"
+  },
+  "devDependencies": {
+    "@types/cache-manager": "^4.0.6",
+    "@types/cache-manager-redis-store": "^2.0.4"
+  }
+}

@@ -44,17 +44,19 @@ import * as redisStore from 'cache-manager-redis-store';
         const redisHost = configService.get<string>('REDIS_HOST', 'localhost');
         const redisPort = configService.get<number>('REDIS_PORT', 6379);
         const redisPassword = configService.get<string>('REDIS_PASSWORD');
+        const redisUsername = configService.get<string>('REDIS_USERNAME', 'default');
         const redisDb = configService.get<number>('REDIS_DB', 0);
         const cacheTTL = configService.get<number>('CACHE_TTL', 300); // 5 minutes default
 
         // Try Redis first, fallback to in-memory
         try {
-          console.log(`🔌 Connecting to Redis: ${redisHost}:${redisPort} (DB: ${redisDb})`);
+          console.log(`🔌 Connecting to Redis Cloud: ${redisHost}:${redisPort} (User: ${redisUsername}, DB: ${redisDb})`);
           
           return {
             store: redisStore,
             host: redisHost,
             port: redisPort,
+            username: redisUsername, // Redis Cloud requires username
             password: redisPassword,
             db: redisDb,
             ttl: cacheTTL,

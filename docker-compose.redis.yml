@@ -1,0 +1,95 @@
+# ============================================================================
+# REDIS CONFIGURATION (Docker Compose)
+# ============================================================================
+# 
+# Production-grade Redis setup for distributed caching
+# 
+# FEATURES:
+# ✅ Persistent storage with AOF + RDB
+# ✅ Memory limits and eviction policies
+# ✅ Health checks
+# ✅ Network isolation
+# ✅ Volume mounting for data persistence
+# 
+# USAGE:
+# docker-compose -f docker-compose.redis.yml up -d
+# 
+# ============================================================================
+
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: sellr-redis
+    restart: unless-stopped
+    
+    # Port mapping
+    ports:
+      - "6379:6379"
+    
+    # Performance and persistence configuration
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --appendfsync everysec
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    
+    # Persistent storage
+    volumes:
+      - redis-data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Network
+    networks:
+      - sellr-network
+
+  # Redis Commander (Optional - Web UI for Redis)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: sellr-redis-commander
+    restart: unless-stopped
+    
+    ports:
+      - "8081:8081"
+    
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    
+    depends_on:
+      - redis
+    
+    networks:
+      - sellr-network
+
+# Volumes
+volumes:
+  redis-data:
+    driver: local
+
+# Networks
+networks:
+  sellr-network:
+    driver: bridge
