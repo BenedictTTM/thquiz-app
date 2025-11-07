@@ -7,6 +7,7 @@ import { UseInterceptors } from '@nestjs/common';
 import { UploadedFiles, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator } from '@nestjs/common';
 import { MeiliSearchService } from '../meilisearch/meilisearch.service';
 import { SearchProductsService } from './Service/search.products.service';
+import { SearchProductsServiceV2 } from './Service/search.products.service.v2';
 import { FlashSalesService } from './Service/flashsales.service';
 
 
@@ -15,7 +16,8 @@ export class ProductController {
   constructor(
     private readonly productService: ProductService,
     private readonly meilisearchService: MeiliSearchService,
-    private readonly searchProductsService: SearchProductsService,
+    private readonly searchProductsService: SearchProductsService, // V1: Legacy (keep for compatibility)
+    private readonly searchProductsServiceV2: SearchProductsServiceV2, // V2: Enterprise-grade
     private readonly flashSalesService: FlashSalesService,
   ) {}
 
@@ -53,6 +55,8 @@ console.log('Uploaded files:', files && files.length > 0 ? files.map(f => f.orig
 
   /**
    * Advanced search endpoint with filters, sorting, and pagination
+   * 🚀 ENTERPRISE GRADE - Uses V2 service with caching, metrics, and fault tolerance
+   * 
    * @route GET /products/search
    * @query q - Search query (optional)
    * @query category - Filter by category (optional)
@@ -60,10 +64,12 @@ console.log('Uploaded files:', files && files.length > 0 ? files.map(f => f.orig
    * @query maxPrice - Maximum price filter (optional)
    * @query condition - Filter by condition (optional)
    * @query tags - Comma-separated tags (optional)
+   * @query inStock - Filter in-stock products only (optional)
    * @query sortBy - Sort order: relevance|price-asc|price-desc|newest|popular (optional, default: relevance)
    * @query page - Page number (optional, default: 1)
    * @query limit - Results per page (optional, default: 20)
-   * @returns Paginated search results with filters
+   * @query cacheable - Enable/disable caching (optional, default: true)
+   * @returns Paginated search results with filters and metadata
    */
   @Get('search')
   async searchProducts(
@@ -73,9 +79,11 @@ console.log('Uploaded files:', files && files.length > 0 ? files.map(f => f.orig
     @Query('maxPrice', new DefaultValuePipe(undefined)) maxPrice?: number,
     @Query('condition') condition?: string,
     @Query('tags') tags?: string,
+    @Query('inStock') inStock?: string,
     @Query('sortBy', new DefaultValuePipe('relevance')) sortBy?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 20,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20,
+    @Query('cacheable', new DefaultValuePipe('true')) cacheable?: string,
   ) {
     const filters: any = {};
     
@@ -84,18 +92,23 @@ console.log('Uploaded files:', files && files.length > 0 ? files.map(f => f.orig
     if (maxPrice !== undefined) filters.maxPrice = Number(maxPrice);
     if (condition) filters.condition = condition;
     if (tags) filters.tags = tags.split(',').map(t => t.trim());
+    if (inStock === 'true') filters.inStock = true;
 
     const options = {
       page,
       limit: Math.min(limit, 100), // Max 100 per page
       sortBy: sortBy as any,
+      cacheable: cacheable !== 'false', // Allow cache bypass
     };
 
-    return await this.searchProductsService.searchProducts(query, filters, options);
+    // Use V2 enterprise-grade search service
+    return await this.searchProductsServiceV2.searchProducts(query, filters, options);
   }
 
   /**
    * Get autocomplete suggestions
+   * 🚀 ENTERPRISE GRADE - Cached with Redis for ultra-fast response
+   * 
    * @route GET /products/search/autocomplete
    * @query q - Search query
    * @query limit - Number of suggestions (optional, default: 5)
@@ -109,7 +122,8 @@ console.log('Uploaded files:', files && files.length > 0 ? files.map(f => f.orig
       return { suggestions: [] };
     }
     
-    const suggestions = await this.searchProductsService.getAutocompleteSuggestions(
+    // Use V2 service with caching
+    const suggestions = await this.searchProductsServiceV2.getAutocompleteSuggestions(
       query,
       Math.min(limit, 10), // Max 10 suggestions
     );
@@ -119,6 +133,8 @@ console.log('Uploaded files:', files && files.length > 0 ? files.map(f => f.orig
 
   /**
    * Get trending searches
+   * 🚀 ENTERPRISE GRADE - Cached with 30-minute TTL
+   * 
    * @route GET /products/search/trending
    * @query limit - Number of trending items (optional, default: 10)
    */
@@ -126,7 +142,8 @@ console.log('Uploaded files:', files && files.length > 0 ? files.map(f => f.orig
   async getTrendingSearches(
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 10,
   ) {
-    const trending = await this.searchProductsService.getTrendingSearches(
+    // Use V2 service with caching
+    const trending = await this.searchProductsServiceV2.getTrendingSearches(
       Math.min(limit, 20), // Max 20 trending items
     );
     
