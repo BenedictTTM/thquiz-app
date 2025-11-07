@@ -26,41 +26,66 @@ export class CartService {
   /**
    * Add a product to the user's cart.
    * 
+   * IMPORTANT: Adding to cart does NOT reduce available stock.
+   * Stock is only decremented during order placement/checkout.
+   * This follows e-commerce best practices where cart is temporary/non-binding.
+   * 
    * Creates a new cart if the user doesn't have one.
    * Updates quantity if product already exists in cart.
-   * Validates product existence and stock availability.
+   * Validates product existence only - stock validation happens at checkout.
+   * 
+   * Stock Management Strategy:
+   * - Cart Addition: Soft validation (allows exceeding stock temporarily)
+   * - Checkout: Hard validation (enforces stock limits)
+   * - Order Placement: Actual stock reduction
+   * 
+   * Rationale:
+   * - Users may abandon carts (80% cart abandonment rate)
+   * - Stock should not be locked for abandoned items
+   * - Race conditions: Multiple users can explore same products
+   * - Better UX: Users can add items and adjust at checkout
    * 
    * @param userId - The authenticated user's ID
    * @param addToCartDto - Product ID and quantity to add
-   * @returns The updated cart with all items and product details
-   * @throws {NotFoundException} If product doesn't exist
-   * @throws {BadRequestException} If insufficient stock or invalid quantity
+   * @returns The updated cart with all items, product details, and stock warnings
+   * @throws {NotFoundException} If product doesn't exist or is deleted
+   * @throws {BadRequestException} If invalid quantity (< 1)
    * @throws {InternalServerErrorException} If database operation fails
    * 
    * @example
    * ```typescript
    * const cart = await cartService.addToCart(1, { productId: 5, quantity: 2 });
+   * // Cart item added - stock validation deferred to checkout
    * ```
    */
   async addToCart(userId: number, addToCartDto: AddToCartDto) {
     const { productId, quantity } = addToCartDto;
 
+    // Validate quantity is positive
+    if (quantity < 1) {
+      throw new BadRequestException('Quantity must be at least 1');
+    }
+
     try {
-      // Validate product exists and check stock
+      // Validate product exists (but don't enforce stock limits)
       const product = await this.prisma.product.findUnique({
         where: { id: productId },
-        select: { id: true, title: true, stock: true, originalPrice: true, discountedPrice: true },
+        select: { 
+          id: true, 
+          title: true, 
+          stock: true, 
+          originalPrice: true, 
+          discountedPrice: true,
+        },
       });
 
       if (!product) {
         throw new NotFoundException(`Product with ID ${productId} not found`);
       }
 
-      if (product.stock < quantity) {
-        throw new BadRequestException(
-          `Insufficient stock. Only ${product.stock} items available`,
-        );
-      }
+      this.logger.log(
+        `🛒 Adding product ${productId} (${product.title}) - Qty: ${quantity}, Available Stock: ${product.stock}`
+      );
 
       // Use transaction to ensure atomicity
       const result = await this.prisma.$transaction(async (tx) => {
@@ -71,6 +96,7 @@ export class CartService {
         });
 
         if (!cart) {
+          this.logger.log(`📦 Creating new cart for user ${userId}`);
           cart = await tx.cart.create({
             data: { userId },
             include: { items: true },
@@ -87,29 +113,41 @@ export class CartService {
           },
         });
 
+        let finalQuantity: number;
+
         if (existingItem) {
           // Update existing item quantity
-          const newQuantity = existingItem.quantity + quantity;
+          finalQuantity = existingItem.quantity + quantity;
 
-          if (product.stock < newQuantity) {
-            throw new BadRequestException(
-              `Cannot add ${quantity} more items. Only ${product.stock - existingItem.quantity} items available`,
-            );
-          }
+          this.logger.log(
+            `✏️ Updating cart item: ${existingItem.quantity} → ${finalQuantity}`
+          );
 
           await tx.cartItem.update({
             where: { id: existingItem.id },
-            data: { quantity: newQuantity },
+            data: { quantity: finalQuantity },
           });
         } else {
           // Create new cart item
+          finalQuantity = quantity;
+
+          this.logger.log(`➕ Creating new cart item with quantity ${finalQuantity}`);
+
           await tx.cartItem.create({
             data: {
               cartId: cart.id,
               productId,
-              quantity,
+              quantity: finalQuantity,
             },
           });
+        }
+
+        // Log stock warning if quantity exceeds available stock
+        if (finalQuantity > product.stock) {
+          this.logger.warn(
+            `⚠️ Cart quantity (${finalQuantity}) exceeds available stock (${product.stock}) for product ${productId}. ` +
+            `User will be notified at checkout.`
+          );
         }
 
         // Return updated cart with full details
@@ -135,6 +173,7 @@ export class CartService {
         });
       });
 
+      this.logger.log(`✅ Cart updated successfully for user ${userId}`);
       return this.formatCartResponse(result);
     } catch (error) {
       if (
@@ -143,6 +182,7 @@ export class CartService {
       ) {
         throw error;
       }
+      this.logger.error(`💥 Failed to add item to cart:`, error.message);
       throw new InternalServerErrorException(
         'Failed to add item to cart',
         error.message,
@@ -207,15 +247,25 @@ export class CartService {
   /**
    * Update the quantity of a specific cart item.
    * 
-   * Validates stock availability before updating.
-   * Automatically removes item if quantity is set to 0.
+   * IMPORTANT: Updating cart quantity does NOT validate stock limits.
+   * Stock validation occurs at checkout to prevent poor UX.
+   * This allows users to freely adjust cart quantities.
+   * 
+   * Allows any positive quantity - stock validation deferred to checkout.
+   * Removes item if quantity is set to 0.
+   * 
+   * Enterprise Pattern:
+   * - Cart is a "wishlist" until checkout
+   * - No stock locking during cart operations
+   * - Frontend can show stock warnings, but doesn't block
+   * - Backend validates stock only during order placement
    * 
    * @param userId - The authenticated user's ID
    * @param itemId - The cart item ID to update
    * @param updateCartItemDto - New quantity value
    * @returns The updated cart with all items and totals
    * @throws {NotFoundException} If cart item doesn't exist or doesn't belong to user
-   * @throws {BadRequestException} If insufficient stock
+   * @throws {BadRequestException} If quantity is negative
    * @throws {InternalServerErrorException} If database operation fails
    * 
    * @example
@@ -230,13 +280,18 @@ export class CartService {
   ) {
     const { quantity } = updateCartItemDto;
 
+    // Validate quantity is non-negative
+    if (quantity < 0) {
+      throw new BadRequestException('Quantity cannot be negative');
+    }
+
     try {
       // Verify item exists and belongs to user's cart
       const cartItem = await this.prisma.cartItem.findUnique({
         where: { id: itemId },
         include: {
           cart: { select: { userId: true, id: true } },
-          product: { select: { stock: true, title: true } },
+          product: { select: { stock: true, title: true, id: true } },
         },
       });
 
@@ -244,11 +299,31 @@ export class CartService {
         throw new NotFoundException('Cart item not found');
       }
 
-      // Update quantity
-      await this.prisma.cartItem.update({
-        where: { id: itemId },
-        data: { quantity },
-      });
+      this.logger.log(
+        `🛒 Updating cart item ${itemId}: ${cartItem.quantity} → ${quantity}`
+      );
+
+      // If quantity is 0, remove the item
+      if (quantity === 0) {
+        this.logger.log(`🗑️ Removing cart item ${itemId} (quantity set to 0)`);
+        await this.prisma.cartItem.delete({
+          where: { id: itemId },
+        });
+      } else {
+        // Update quantity (no stock validation)
+        await this.prisma.cartItem.update({
+          where: { id: itemId },
+          data: { quantity },
+        });
+
+        // Log warning if exceeds stock
+        if (quantity > cartItem.product.stock) {
+          this.logger.warn(
+            `⚠️ Cart item quantity (${quantity}) exceeds available stock (${cartItem.product.stock}) ` +
+            `for product ${cartItem.product.id}. Stock validation will occur at checkout.`
+          );
+        }
+      }
 
       // Return updated cart
       return this.getCart(userId);
@@ -259,6 +334,7 @@ export class CartService {
       ) {
         throw error;
       }
+      this.logger.error(`💥 Failed to update cart item:`, error.message);
       throw new InternalServerErrorException(
         'Failed to update cart item',
         error.message,
@@ -401,22 +477,31 @@ export class CartService {
   /**
    * Merge anonymous cart items with authenticated user's cart.
    * 
+   * IMPORTANT: Cart merge does NOT enforce stock limits.
+   * This follows the same pattern as addToCart - stock validation at checkout only.
+   * 
    * Called after user login/signup to preserve cart items added while anonymous.
    * Intelligently combines quantities for duplicate products.
-   * Validates product existence and stock availability for all items.
+   * Validates product existence but not stock availability.
    * Uses database transaction to ensure atomicity.
    * 
    * Merge Logic:
    * - If product already in user cart: Add quantities together
    * - If product not in cart: Add as new item
-   * - Validates stock availability for final quantities
+   * - No stock validation (deferred to checkout)
    * - All operations are atomic (succeed or fail together)
+   * 
+   * Enterprise Best Practice:
+   * - Allow users to merge carts freely
+   * - Show stock warnings in UI, but don't block merge
+   * - Validate stock only when user attempts checkout
+   * - Better conversion rates by reducing friction
    * 
    * @param userId - The authenticated user's ID
    * @param mergeCartDto - Array of cart items from local storage
-   * @returns The merged cart with all items and updated totals
+   * @returns The merged cart with all items, stock status, and updated totals
    * @throws {NotFoundException} If any product doesn't exist
-   * @throws {BadRequestException} If insufficient stock for any item
+   * @throws {BadRequestException} If invalid quantities
    * @throws {InternalServerErrorException} If database operation fails
    * 
    * @example
@@ -429,12 +514,21 @@ export class CartService {
    *   ]
    * });
    * // Result: Cart with 3 items total (existing + new)
+   * // Stock validation happens at checkout, not merge
    * ```
    */
   async mergeCart(userId: number, mergeCartDto: MergeCartDto) {
     const { items } = mergeCartDto;
 
     this.logger.log(`🔄 Starting cart merge for user ${userId} with ${items.length} items`);
+
+    // Validate all quantities are positive
+    const invalidItems = items.filter(item => item.quantity < 1);
+    if (invalidItems.length > 0) {
+      throw new BadRequestException(
+        `Invalid quantities detected. All quantities must be at least 1.`
+      );
+    }
 
     try {
       // Use transaction to ensure all operations succeed or fail together
@@ -483,7 +577,7 @@ export class CartService {
           this.logger.log(`📦 Found existing cart ${cart.id} with ${cart.items.length} items`);
         }
 
-        // Step 2: Validate all products exist and have sufficient stock
+        // Step 2: Validate all products exist (but don't check stock)
         const productIds = items.map((item) => item.productId);
         const products = await tx.product.findMany({
           where: {
@@ -518,6 +612,8 @@ export class CartService {
           oldQuantity?: number;
           newQuantity?: number;
           quantity?: number;
+          stockWarning?: boolean;
+          availableStock?: number;
         }> = [];
 
         for (const item of items) {
@@ -535,21 +631,8 @@ export class CartService {
           );
 
           if (existingCartItem) {
-            // Product exists: Merge quantities
+            // Product exists: Merge quantities (no stock validation)
             const newQuantity = existingCartItem.quantity + item.quantity;
-
-            // Validate stock for combined quantity
-            if (product.stock < newQuantity) {
-              this.logger.error(
-                `❌ Insufficient stock for ${product.title}: requested ${newQuantity}, available ${product.stock}`,
-              );
-              throw new BadRequestException(
-                `Insufficient stock for "${product.title}". ` +
-                `You already have ${existingCartItem.quantity} in cart, ` +
-                `trying to add ${item.quantity} more, ` +
-                `but only ${product.stock} available in total.`,
-              );
-            }
 
             // Update existing cart item
             await tx.cartItem.update({
@@ -558,29 +641,29 @@ export class CartService {
             });
 
             this.logger.log(
-              `✏️ Updated product ${product.id}: ${existingCartItem.quantity} → ${newQuantity}`,
+              `✏️ Updated product ${product.id}: ${existingCartItem.quantity} → ${newQuantity}`
             );
+
+            // Check if exceeds stock (warning only, doesn't block)
+            const stockWarning = newQuantity > product.stock;
+            if (stockWarning) {
+              this.logger.warn(
+                `⚠️ Merged quantity (${newQuantity}) exceeds available stock (${product.stock}) for "${product.title}". ` +
+                `User will be notified at checkout.`
+              );
+            }
 
             mergeResults.push({
               productId: product.id,
               action: 'updated',
               oldQuantity: existingCartItem.quantity,
               newQuantity,
+              stockWarning,
+              availableStock: product.stock,
             });
           } else {
-            // Product doesn't exist: Add as new item
+            // Product doesn't exist: Add as new item (no stock validation)
             
-            // Validate stock for new item
-            if (product.stock < item.quantity) {
-              this.logger.error(
-                `❌ Insufficient stock for ${product.title}: requested ${item.quantity}, available ${product.stock}`,
-              );
-              throw new BadRequestException(
-                `Insufficient stock for "${product.title}". ` +
-                `Requested ${item.quantity}, but only ${product.stock} available.`,
-              );
-            }
-
             // Create new cart item
             await tx.cartItem.create({
               data: {
@@ -591,13 +674,24 @@ export class CartService {
             });
 
             this.logger.log(
-              `➕ Added new product ${product.id} with quantity ${item.quantity}`,
+              `➕ Added new product ${product.id} with quantity ${item.quantity}`
             );
+
+            // Check if exceeds stock (warning only)
+            const stockWarning = item.quantity > product.stock;
+            if (stockWarning) {
+              this.logger.warn(
+                `⚠️ Added quantity (${item.quantity}) exceeds available stock (${product.stock}) for "${product.title}". ` +
+                `User will be notified at checkout.`
+              );
+            }
 
             mergeResults.push({
               productId: product.id,
               action: 'added',
               quantity: item.quantity,
+              stockWarning,
+              availableStock: product.stock,
             });
           }
         }
@@ -605,8 +699,11 @@ export class CartService {
         // Log merge summary
         const addedCount = mergeResults.filter((r) => r.action === 'added').length;
         const updatedCount = mergeResults.filter((r) => r.action === 'updated').length;
+        const warningCount = mergeResults.filter((r) => r.stockWarning).length;
+        
         this.logger.log(
-          `✅ Merge complete: ${addedCount} items added, ${updatedCount} items updated`,
+          `✅ Merge complete: ${addedCount} items added, ${updatedCount} items updated` +
+          (warningCount > 0 ? `, ${warningCount} stock warnings` : '')
         );
 
         // Step 4: Fetch and return the complete merged cart
@@ -653,26 +750,56 @@ export class CartService {
   }
 
   /**
-   * Format cart response with calculated totals.
+   * Format cart response with calculated totals and stock availability.
    * 
    * Private helper method to ensure consistent response structure.
    * Calculates subtotal, applies discounts, and counts total items.
+   * Includes stock availability warnings for frontend display.
+   * 
+   * Stock Status Flags:
+   * - hasStockIssues: true if any item exceeds available stock
+   * - Item-level flags: inStock, availableStock, exceedsStock
+   * 
+   * This allows frontend to:
+   * - Display warning badges on cart items
+   * - Show informative messages before checkout
+   * - Disable checkout if stock insufficient
    * 
    * @private
    * @param cart - Raw cart data from database
-   * @returns Formatted cart with totals
+   * @returns Formatted cart with totals and stock information
    */
   private formatCartResponse(cart: any) {
     if (!cart) return null;
+
+    let hasStockIssues = false;
 
     const items = cart.items.map((item: any) => {
       // Use discountedPrice if available, otherwise use originalPrice
       const effectivePrice = item.product.discountedPrice || item.product.originalPrice;
 
+      // Check stock availability
+      const availableStock = item.product.stock || 0;
+      const inStock = item.quantity <= availableStock;
+      const exceedsStock = item.quantity > availableStock;
+
+      if (exceedsStock) {
+        hasStockIssues = true;
+      }
+
       return {
         id: item.id,
         quantity: item.quantity,
-        product: item.product,
+        product: {
+          ...item.product,
+          // Include stock status for frontend
+          stockStatus: {
+            available: availableStock,
+            inStock,
+            exceedsStock,
+            maxAvailable: exceedsStock ? availableStock : null,
+          },
+        },
         itemTotal: effectivePrice * item.quantity,
       };
     });
@@ -693,6 +820,7 @@ export class CartService {
       items,
       subtotal: Number(subtotal.toFixed(2)),
       totalItems,
+      hasStockIssues, // Global flag for frontend
       createdAt: cart.createdAt,
       updatedAt: cart.updatedAt,
     };
