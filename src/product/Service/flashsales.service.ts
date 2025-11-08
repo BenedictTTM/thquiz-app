@@ -372,8 +372,10 @@ export class FlashSalesService {
         },
       });
 
-      // OPTIMIZATION: Single-pass filter + transform
-      const eligibleProducts: FlashSaleProduct[] = [];
+      // OPTIMIZATION: Single-pass filter + transform with tiered discount ranges
+      const premiumProducts: FlashSaleProduct[] = []; // 30-70% discount
+      const goodProducts: FlashSaleProduct[] = []; // 20-29% discount
+      const anyDiscountProducts: FlashSaleProduct[] = []; // Any discount
       
       for (const product of products) {
         const discountPercentage = this.calculateDiscount(
@@ -381,23 +383,49 @@ export class FlashSalesService {
           product.discountedPrice,
         );
         
-        // Filter inline to avoid double iteration
+        const productWithDiscount = {
+          ...product,
+          discountPercentage,
+        };
+        
+        // Categorize by discount tier
         if (discountPercentage >= 30 && discountPercentage <= 70) {
-          eligibleProducts.push({
-            ...product,
-            discountPercentage,
-          });
+          premiumProducts.push(productWithDiscount);
+        } else if (discountPercentage >= 20 && discountPercentage < 30) {
+          goodProducts.push(productWithDiscount);
+        } else if (discountPercentage > 0) {
+          anyDiscountProducts.push(productWithDiscount);
         }
       }
 
       this.logger.log(
-        `✅ Found ${eligibleProducts.length} eligible products (from ${products.length} total)`,
+        `✅ Found products by tier: Premium (30-70%): ${premiumProducts.length}, ` +
+        `Good (20-29%): ${goodProducts.length}, Any discount: ${anyDiscountProducts.length}`,
       );
 
-      // Shuffle and select products
-      // Target: 6 products, but will return whatever is available (1-6 products)
-      const targetCount = Math.min(6, eligibleProducts.length);
-      const selectedProducts = this.shuffleArray(eligibleProducts).slice(0, targetCount);
+      // Build final selection: Prioritize premium, then good, then any discount
+      // Always try to get 6 products total
+      let selectedProducts: FlashSaleProduct[] = [];
+      
+      // First, add all premium products (up to 6)
+      selectedProducts = this.shuffleArray(premiumProducts).slice(0, 6);
+      
+      // If we need more, add good products
+      if (selectedProducts.length < 6) {
+        const needed = 6 - selectedProducts.length;
+        const additionalGood = this.shuffleArray(goodProducts).slice(0, needed);
+        selectedProducts = [...selectedProducts, ...additionalGood];
+      }
+      
+      // If still need more, add any discount products
+      if (selectedProducts.length < 6) {
+        const needed = 6 - selectedProducts.length;
+        const additionalAny = this.shuffleArray(anyDiscountProducts).slice(0, needed);
+        selectedProducts = [...selectedProducts, ...additionalAny];
+      }
+      
+      // Shuffle final selection for variety
+      selectedProducts = this.shuffleArray(selectedProducts);
 
       const duration = Date.now() - startTime;
       this.logger.log(
