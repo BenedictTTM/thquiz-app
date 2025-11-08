@@ -5,9 +5,7 @@ import { AuthGuard } from '../guards/auth.guard'; // Adjust the import path as n
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { UseInterceptors } from '@nestjs/common';
 import { UploadedFiles, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator } from '@nestjs/common';
-import { MeiliSearchService } from '../meilisearch/meilisearch.service';
 import { SearchProductsService } from './Service/search.products.service';
-import { SearchProductsServiceV2 } from './Service/search.products.service.v2';
 import { FlashSalesService } from './Service/flashsales.service';
 
 
@@ -15,9 +13,7 @@ import { FlashSalesService } from './Service/flashsales.service';
 export class ProductController {
   constructor(
     private readonly productService: ProductService,
-    private readonly meilisearchService: MeiliSearchService,
-    private readonly searchProductsService: SearchProductsService, // V1: Legacy (keep for compatibility)
-    private readonly searchProductsServiceV2: SearchProductsServiceV2, // V2: Enterprise-grade
+    private readonly searchProductsService: SearchProductsService,
     private readonly flashSalesService: FlashSalesService,
   ) {}
 
@@ -101,8 +97,8 @@ console.log('Uploaded files:', files && files.length > 0 ? files.map(f => f.orig
       cacheable: cacheable !== 'false', // Allow cache bypass
     };
 
-    // Use V2 enterprise-grade search service
-    return await this.searchProductsServiceV2.searchProducts(query, filters, options);
+    // Use enterprise-grade search service
+    return await this.searchProductsService.searchProducts(query, filters, options);
   }
 
   /**
@@ -122,8 +118,8 @@ console.log('Uploaded files:', files && files.length > 0 ? files.map(f => f.orig
       return { suggestions: [] };
     }
     
-    // Use V2 service with caching
-    const suggestions = await this.searchProductsServiceV2.getAutocompleteSuggestions(
+    // Use search service with caching
+    const suggestions = await this.searchProductsService.getAutocompleteSuggestions(
       query,
       Math.min(limit, 10), // Max 10 suggestions
     );
@@ -142,8 +138,8 @@ console.log('Uploaded files:', files && files.length > 0 ? files.map(f => f.orig
   async getTrendingSearches(
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 10,
   ) {
-    // Use V2 service with caching
-    const trending = await this.searchProductsServiceV2.getTrendingSearches(
+    // Use search service with caching
+    const trending = await this.searchProductsService.getTrendingSearches(
       Math.min(limit, 20), // Max 20 trending items
     );
     
@@ -223,36 +219,6 @@ console.log('Uploaded files:', files && files.length > 0 ? files.map(f => f.orig
   async deleteProduct(@Param('id') id: string, @Request() req) {
     const userId = req.user?.id;
     return this.productService.deleteProduct(+id, userId);
-  }
-
-  /**
-   * Sync all products to MeiliSearch
-   * @route POST /products/sync/meilisearch
-   * @auth Optional - Can be protected with admin guard
-   */
-  @Post('sync/meilisearch')
-  async syncToMeiliSearch() {
-    // Get all products without pagination for sync
-    const result = await this.productService.getAllProducts(1, 10000);
-    const products = result.data;
-    
-    await this.meilisearchService.syncAllProducts(products);
-    
-    return {
-      success: true,
-      message: `Successfully synced ${products.length} products to MeiliSearch`,
-      count: products.length,
-    };
-  }
-
-  /**
-   * Get MeiliSearch index statistics
-   * @route GET /products/search/stats
-   */
-  @Get('search/stats')
-  async getSearchStats() {
-    const stats = await this.meilisearchService.getIndexStats();
-    return stats;
   }
 
   /**

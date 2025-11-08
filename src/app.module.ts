@@ -7,7 +7,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ProductModule } from './product/product.module'
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { CartModule } from './cart/cart.module';
-import { MeiliSearchModule } from './meilisearch/meilisearch.module';
+import { SearchModule } from './search/search.module';
 import { PaymentModule } from './payment/payment.module';
 import { SlotModule } from './slot/slot.module';
 import { OrderModule } from './order/order.module';
@@ -24,7 +24,7 @@ import { OrderModule } from './order/order.module';
     ProductModule,
     CloudinaryModule,
     CartModule,
-    MeiliSearchModule,
+    SearchModule, // PostgreSQL Full-Text Search
     PaymentModule,
     // Slot management
     SlotModule,

@@ -9,7 +9,6 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProductDto } from '../dto/product.dto';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
-import { MeiliSearchService } from '../../meilisearch/meilisearch.service';
 
 /**
  * CrudService - Enterprise Performance Edition
@@ -17,7 +16,6 @@ import { MeiliSearchService } from '../../meilisearch/meilisearch.service';
  * PERFORMANCE OPTIMIZATIONS:
  * ✅ Parallel image uploads (3x faster for multiple images)
  * ✅ Transaction optimization (ACID with minimal lock time)
- * ✅ Async search indexing (non-blocking)
  * ✅ Efficient error handling
  * ✅ Optimistic locking strategies
  * 
@@ -33,7 +31,6 @@ export class CrudService {
   constructor(
     private prisma: PrismaService,
     private cloudinaryService: CloudinaryService,
-    private meilisearchService: MeiliSearchService,
   ) {}
 
   async uploadImageToCloudinary(file: Express.Multer.File) {
@@ -113,11 +110,6 @@ export class CrudService {
         return created;
       });
 
-      // OPTIMIZATION: Async search indexing (non-blocking)
-      this.meilisearchService.indexProduct(newProduct)
-        .then(() => this.logger.log(`✅ Product ${newProduct.id} indexed in MeiliSearch`))
-        .catch(err => this.logger.warn(`⚠️ Search indexing failed: ${err.message}`));
-
       const duration = Date.now() - startTime;
       this.logger.log(`✅ Product created | ID:${newProduct.id} | ${duration}ms`);
       
@@ -155,11 +147,6 @@ export class CrudService {
         data: productData,
       });
 
-      // OPTIMIZATION: Async search update (non-blocking)
-      this.meilisearchService.updateProduct(productId, updated)
-        .then(() => this.logger.log(`✅ Product ${productId} updated in MeiliSearch`))
-        .catch(err => this.logger.warn(`⚠️ Search update failed: ${err.message}`));
-
       const duration = Date.now() - startTime;
       this.logger.log(`✅ Product updated | ID:${productId} | ${duration}ms`);
 
@@ -196,11 +183,6 @@ export class CrudService {
         where: { id: productId },
         data: { isActive: false },
       });
-
-      // OPTIMIZATION: Async search update (non-blocking)
-      this.meilisearchService.updateProduct(productId, softDeleted)
-        .then(() => this.logger.log(`✅ Product ${productId} marked inactive in MeiliSearch`))
-        .catch(err => this.logger.warn(`⚠️ Search update failed: ${err.message}`));
 
       const duration = Date.now() - startTime;
       this.logger.log(`✅ Product deleted | ID:${productId} | ${duration}ms`);

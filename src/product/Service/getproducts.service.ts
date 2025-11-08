@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProductDto } from '../dto/product.dto';
-import { MeiliSearchService } from '../../meilisearch/meilisearch.service';
 
 /**
  * GetProductsService - Enterprise Performance Edition
@@ -31,7 +30,6 @@ export class GetProductsService {
 
   constructor(
     private prisma: PrismaService,
-    private meilisearchService: MeiliSearchService,
   ) {}
 
   /**
@@ -123,87 +121,8 @@ export class GetProductsService {
 
   async searchProducts(searchTerm: string) {
     try {
-      // Use MeiliSearch for fast, typo-tolerant search
-      this.logger.log(`🔍 Searching with MeiliSearch: "${searchTerm}"`);
-      
-      const searchResults = await this.meilisearchService.searchProducts(
-        searchTerm,
-        {
-          isActive: true, // Only active products
-        },
-        {
-          limit: 50, // Limit results
-        }
-      );
-
-      // Get full product details from database for the search results
-      const productIds = searchResults.hits.map((hit: any) => hit.id);
-      
-      if (productIds.length === 0) {
-        return [];
-      }
-
-      const products = await this.prisma.product.findMany({
-        where: {
-          id: { in: productIds },
-          isActive: true,
-        },
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          imageUrl: true,
-          category: true,
-          originalPrice: true,
-          discountedPrice: true,
-          condition: true,
-          tags: true,
-          views: true,
-          createdAt: true,
-          user: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              rating: true,
-              premiumTier: true,
-            },
-          },
-          images: {
-            select: {
-              url: true,
-            },
-            take: 1,
-          },
-          reviews: {
-            select: {
-              rating: true,
-            },
-          },
-          _count: {
-            select: {
-              reviews: true,
-            },
-          },
-        },
-      });
-
-      // Maintain MeiliSearch relevance order
-      const orderedProducts = productIds
-        .map(id => products.find(p => p.id === id))
-        .filter(p => p !== undefined);
-
-      this.logger.log(`✅ Found ${orderedProducts.length} products via MeiliSearch`);
-
-      return orderedProducts.map(product => ({
-        ...product,
-        averageRating: this.calculateAverageRating(product.reviews),
-        totalReviews: product._count.reviews,
-      }));
-    } catch (error) {
-      // Fallback to database search if MeiliSearch fails
-      this.logger.warn(`⚠️ MeiliSearch failed, falling back to database: ${error.message}`);
+      // Use direct database search
+      this.logger.log(`🔍 Searching database: "${searchTerm}"`);
       
       const products = await this.prisma.product.findMany({
         where: {
@@ -260,14 +179,22 @@ export class GetProductsService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        take: 50,
+        orderBy: {
+          createdAt: 'desc',
+        },
       });
+
+      this.logger.log(`✅ Found ${products.length} products`);
 
       return products.map(product => ({
         ...product,
         averageRating: this.calculateAverageRating(product.reviews),
         totalReviews: product._count.reviews,
       }));
+    } catch (error) {
+      this.logger.error(`❌ Search failed: ${error.message}`);
+      return [];
     }
   }
 
