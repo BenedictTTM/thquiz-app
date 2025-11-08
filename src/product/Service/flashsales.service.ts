@@ -69,9 +69,11 @@ export class FlashSalesService {
   // Pre-rendering Control
   private isPrerendering = false;
   private readonly PRE_RENDER_MINUTES = 5; // Start preparing 5min before expiry
+  private readonly ROTATION_INTERVAL_MINUTES = 120; // Rotate every 2 hours
   
   constructor(private prisma: PrismaService) {
     // Initialize both buffers on startup
+    this.logger.log('🔧 PRODUCTION MODE: 2-hour rotation interval');
     this.initializeService();
   }
 
@@ -81,26 +83,35 @@ export class FlashSalesService {
    */
   private async initializeService() {
     this.logger.log('🚀 Initializing Flash Sales Service...');
+    this.logger.log(`📊 CONFIG: Rotation=${this.ROTATION_INTERVAL_MINUTES}min, Pre-render=${this.PRE_RENDER_MINUTES}min before`);
     
     try {
       // Set initial timestamps
       this.currentRefreshTime = new Date();
-      this.nextRefreshTime = this.getNextHourStart();
+      this.nextRefreshTime = this.getNextRotationTime();
+      
+      this.logger.log(`⏰ Initial timestamps set:`);
+      this.logger.log(`   Current refresh: ${this.currentRefreshTime.toISOString()}`);
+      this.logger.log(`   Next refresh: ${this.nextRefreshTime.toISOString()}`);
       
       // Load initial batch immediately
+      this.logger.log('📦 Loading initial current batch...');
       await this.refreshCurrentBatch();
       
       // Pre-render next batch in background (don't wait)
+      this.logger.log('🎨 Starting background pre-render of next batch...');
       this.preRenderNextBatch().catch(err => 
         this.logger.error(`Failed to pre-render on init: ${err.message}`)
       );
       
       this.logger.log(
         `✅ Flash Sales initialized | Current batch: ${this.currentBatch.length} products | ` +
+        `Next batch: ${this.nextBatch.length} products | ` +
         `Next refresh: ${this.nextRefreshTime.toISOString()}`
       );
     } catch (error) {
       this.logger.error(`❌ Failed to initialize Flash Sales: ${error.message}`);
+      this.logger.error(`Stack trace: ${error.stack}`);
       // Set empty fallback
       this.currentBatch = [];
       this.nextBatch = [];
@@ -108,38 +119,65 @@ export class FlashSalesService {
   }
 
   /**
-   * PRIMARY CRON: Runs every hour at HH:00:00 to swap buffers
+   * PRIMARY CRON: Runs every 2 hours to swap buffers (0:00, 2:00, 4:00, etc.)
    * This is instant because next batch is already pre-rendered
    */
-  @Cron(CronExpression.EVERY_HOUR)
-  async handleHourlySwap() {
-    this.logger.log('🔄 Hourly flash sales rotation triggered');
+  @Cron('0 */2 * * *') // Every 2 hours at the top of the hour
+  async handleRotationSwap() {
+    const now = new Date();
+    this.logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    this.logger.log('🔄 2-HOUR ROTATION TRIGGERED');
+    this.logger.log(`⏰ Trigger time: ${now.toISOString()}`);
+    this.logger.log(`📊 Current batch size: ${this.currentBatch.length}`);
+    this.logger.log(`📊 Next batch size: ${this.nextBatch.length}`);
+    this.logger.log(`📊 Generation counter: ${this.generationCounter}`);
+    this.logger.log(`📊 Is pre-rendering: ${this.isPrerendering}`);
+    
     await this.performBufferSwap();
+    
+    this.logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
   /**
-   * SECONDARY CRON: Runs at HH:55:00 to pre-render next batch
-   * Gives 5 minutes for preparation before swap
+   * SECONDARY CRON: Runs at 55 minutes past odd hours (1:55, 3:55, 5:55, etc.)
+   * Pre-renders 5 minutes before the 2-hour swap
    */
-  @Cron('0 55 * * * *') // Every hour at 55 minutes
+  @Cron('55 1,3,5,7,9,11,13,15,17,19,21,23 * * *') // 5 minutes before each even hour
   async handlePreRender() {
-    this.logger.log('⏰ Pre-render trigger (5min before swap)');
+    const now = new Date();
+    this.logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    this.logger.log('⏰ PRE-RENDER TRIGGER (5min before swap)');
+    this.logger.log(`⏰ Trigger time: ${now.toISOString()}`);
+    this.logger.log(`📊 Current batch size: ${this.currentBatch.length}`);
+    this.logger.log(`📊 Next batch size: ${this.nextBatch.length}`);
+    this.logger.log(`📊 Is pre-rendering: ${this.isPrerendering}`);
+    
     await this.preRenderNextBatch();
+    
+    this.logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
   /**
-   * BACKUP CRON: Safety fallback every 5 minutes to check if refresh is needed
+   * BACKUP CRON: Safety fallback every 15 minutes to check if refresh is needed
    * Only triggers if system missed the main cron jobs
    */
-  @Cron('*/5 * * * *') // Every 5 minutes
+  @Cron('*/15 * * * *') // Every 15 minutes
   async handleSafetyCheck() {
     const now = new Date();
     const timeSinceRefresh = now.getTime() - this.currentRefreshTime?.getTime();
+    const minutesSinceRefresh = Math.floor(timeSinceRefresh / (60 * 1000));
     
-    // If more than 65 minutes since last refresh (missed cron), force refresh
-    if (timeSinceRefresh > 65 * 60 * 1000) {
-      this.logger.warn('⚠️ Safety check triggered - missed regular refresh');
+    this.logger.log(`🔍 Safety check: ${minutesSinceRefresh} minutes since last refresh`);
+    
+    // If more than 2.5 hours since last refresh (missed cron), force refresh
+    if (timeSinceRefresh > 150 * 60 * 1000) {
+      this.logger.warn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      this.logger.warn('⚠️ SAFETY CHECK TRIGGERED - MISSED REGULAR REFRESH');
+      this.logger.warn(`⚠️ Time since last refresh: ${minutesSinceRefresh} minutes`);
+      this.logger.warn(`⚠️ Expected: ${this.ROTATION_INTERVAL_MINUTES} minutes`);
+      this.logger.warn('⚠️ Forcing emergency refresh...');
       await this.performBufferSwap();
+      this.logger.warn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
   }
 
@@ -151,64 +189,94 @@ export class FlashSalesService {
   private async performBufferSwap() {
     const startTime = Date.now();
     
+    this.logger.log('🔄 SWAP START');
+    this.logger.log(`   Before swap - Current: ${this.currentBatch.length}, Next: ${this.nextBatch.length}`);
+    
     try {
       // Atomic swap - no database queries, instant
       if (this.nextBatch.length > 0) {
+        const oldBatchSize = this.currentBatch.length;
         this.currentBatch = this.nextBatch;
         this.nextBatch = [];
         this.generationCounter++;
         
         this.logger.log(
-          `✅ Buffer swapped | Generation ${this.generationCounter} | ` +
-          `${this.currentBatch.length} products now live | ${Date.now() - startTime}ms`
+          `✅ SWAP COMPLETE | Generation ${this.generationCounter} | ` +
+          `Old batch: ${oldBatchSize} → New batch: ${this.currentBatch.length} products | ` +
+          `Duration: ${Date.now() - startTime}ms`
         );
       } else {
-        this.logger.warn('⚠️ Next batch empty during swap, refreshing current batch instead');
+        this.logger.warn('⚠️ WARNING: Next batch empty during swap!');
+        this.logger.warn('⚠️ This means pre-rendering failed or didn\'t run');
+        this.logger.warn('⚠️ Falling back to emergency refresh of current batch...');
         await this.refreshCurrentBatch();
       }
       
       // Update timestamps
-      this.currentRefreshTime = new Date();
-      this.nextRefreshTime = this.getNextHourStart();
+      const oldRefreshTime = this.currentRefreshTime;
+      const oldNextTime = this.nextRefreshTime;
       
-      this.logger.log(`📅 Next refresh scheduled for: ${this.nextRefreshTime.toISOString()}`);
+      this.currentRefreshTime = new Date();
+      this.nextRefreshTime = this.getNextRotationTime();
+      
+      this.logger.log(`📅 Timestamp update:`);
+      this.logger.log(`   Old current: ${oldRefreshTime?.toISOString()}`);
+      this.logger.log(`   New current: ${this.currentRefreshTime.toISOString()}`);
+      this.logger.log(`   Old next: ${oldNextTime?.toISOString()}`);
+      this.logger.log(`   New next: ${this.nextRefreshTime.toISOString()}`);
       
     } catch (error) {
-      this.logger.error(`❌ Buffer swap failed: ${error.message}`);
+      this.logger.error(`❌ SWAP FAILED: ${error.message}`);
+      this.logger.error(`Stack: ${error.stack}`);
       // Keep current batch active on error
     }
   }
 
   /**
    * Pre-render next batch in background
-   * Runs 5 minutes before swap to ensure smooth transition
+   * Runs 1 minute before swap to ensure smooth transition (TESTING MODE)
    */
   private async preRenderNextBatch() {
+    this.logger.log('🎨 PRE-RENDER ATTEMPT');
+    this.logger.log(`   isPrerendering flag: ${this.isPrerendering}`);
+    
     if (this.isPrerendering) {
-      this.logger.warn('⚠️ Pre-render already in progress, skipping');
+      this.logger.warn('⚠️ SKIP: Pre-render already in progress');
+      this.logger.warn('⚠️ This might indicate a previous pre-render is stuck!');
       return;
     }
 
     this.isPrerendering = true;
+    this.logger.log('🔒 Pre-rendering flag set to TRUE');
+    
     const startTime = Date.now();
     
     try {
-      this.logger.log('🎨 Pre-rendering next flash sales batch...');
+      this.logger.log('🎨 Starting product fetch for next batch...');
       
       const products = await this.fetchFlashSaleProducts();
+      
+      this.logger.log(`📦 Fetched ${products.length} products`);
+      this.logger.log(`   Current nextBatch size before assignment: ${this.nextBatch.length}`);
+      
       this.nextBatch = products;
+      
+      this.logger.log(`   Next batch size after assignment: ${this.nextBatch.length}`);
       
       const duration = Date.now() - startTime;
       this.logger.log(
-        `✅ Next batch pre-rendered | ${this.nextBatch.length} products ready | ` +
+        `✅ PRE-RENDER SUCCESS | ${this.nextBatch.length} products ready | ` +
         `${duration}ms | Swap scheduled: ${this.nextRefreshTime.toISOString()}`
       );
       
     } catch (error) {
-      this.logger.error(`❌ Pre-render failed: ${error.message}`);
+      this.logger.error(`❌ PRE-RENDER FAILED: ${error.message}`);
+      this.logger.error(`Stack: ${error.stack}`);
+      this.logger.error(`Next batch remains: ${this.nextBatch.length} products`);
       // Keep old next batch as fallback
     } finally {
       this.isPrerendering = false;
+      this.logger.log('🔓 Pre-rendering flag set to FALSE');
     }
   }
 
@@ -218,21 +286,28 @@ export class FlashSalesService {
   private async refreshCurrentBatch() {
     const startTime = Date.now();
     
+    this.logger.log('🔄 REFRESH CURRENT BATCH START');
+    this.logger.log(`   Current batch size before: ${this.currentBatch.length}`);
+    
     try {
-      this.logger.log('🔄 Loading current flash sales batch...');
+      this.logger.log('� Fetching products for current batch...');
       
       const products = await this.fetchFlashSaleProducts();
+      
+      this.logger.log(`📦 Fetched ${products.length} products`);
+      
       this.currentBatch = products;
       this.generationCounter++;
       
       const duration = Date.now() - startTime;
       this.logger.log(
-        `✅ Current batch loaded | Generation ${this.generationCounter} | ` +
+        `✅ CURRENT BATCH REFRESHED | Generation ${this.generationCounter} | ` +
         `${this.currentBatch.length} products | ${duration}ms`
       );
       
     } catch (error) {
-      this.logger.error(`❌ Failed to load current batch: ${error.message}`);
+      this.logger.error(`❌ REFRESH CURRENT BATCH FAILED: ${error.message}`);
+      this.logger.error(`Stack: ${error.stack}`);
       throw error;
     }
   }
@@ -341,21 +416,31 @@ export class FlashSalesService {
    * Always serves from currentBatch (pre-rendered, instant response)
    */
   async getFlashSales(): Promise<FlashSaleResponse> {
+    this.logger.log('📡 GET request received');
+    this.logger.log(`   Current batch: ${this.currentBatch.length} products`);
+    this.logger.log(`   Next batch: ${this.nextBatch.length} products`);
+    this.logger.log(`   Generation: ${this.generationCounter}`);
+    
     // If current batch is empty (shouldn't happen), try emergency refresh
     if (this.currentBatch.length === 0) {
-      this.logger.warn('⚠️ Current batch empty, performing emergency refresh');
+      this.logger.warn('⚠️ EMERGENCY: Current batch empty!');
+      this.logger.warn('⚠️ Performing emergency refresh...');
       await this.refreshCurrentBatch();
     }
 
     const now = new Date();
     const refreshesIn = this.nextRefreshTime.getTime() - now.getTime();
 
-    return {
+    const response = {
       products: this.currentBatch,
       nextRefreshAt: this.nextRefreshTime,
       refreshesIn: Math.max(0, refreshesIn),
       generation: this.generationCounter,
     };
+    
+    this.logger.log(`✅ Returning ${response.products.length} products | Refreshes in ${Math.floor(refreshesIn / 1000)}s`);
+
+    return response;
   }
 
   /**
@@ -371,11 +456,26 @@ export class FlashSalesService {
   }
 
   /**
-   * Get the start of the next hour
+   * Get the next rotation time (every 2 hours at even hours: 0:00, 2:00, 4:00, etc.)
    */
-  private getNextHourStart(): Date {
-    const next = new Date();
-    next.setHours(next.getHours() + 1, 0, 0, 0);
+  private getNextRotationTime(): Date {
+    const now = new Date();
+    const next = new Date(now);
+    
+    // Round up to next 2-hour mark (0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22)
+    const currentHour = next.getHours();
+    const nextInterval = Math.ceil((currentHour + 1) / 2) * 2;
+    
+    next.setHours(nextInterval % 24, 0, 0, 0);
+    
+    // If we've wrapped to next day, ensure we're at the right time
+    if (nextInterval >= 24) {
+      next.setDate(next.getDate() + 1);
+      next.setHours(0, 0, 0, 0);
+    }
+    
+    this.logger.log(`⏰ Calculated next rotation: ${next.toISOString()} (from ${now.toISOString()})`);
+    
     return next;
   }
 
@@ -384,11 +484,16 @@ export class FlashSalesService {
    * Forces immediate buffer swap with new products
    */
   async forceRefresh(): Promise<FlashSaleResponse> {
-    this.logger.log('🔄 Manual flash sales refresh triggered');
+    this.logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    this.logger.log('🔄 MANUAL REFRESH TRIGGERED');
+    this.logger.log(`   Before: Current=${this.currentBatch.length}, Next=${this.nextBatch.length}`);
     
     // Refresh both buffers
     await this.refreshCurrentBatch();
     await this.preRenderNextBatch();
+    
+    this.logger.log(`   After: Current=${this.currentBatch.length}, Next=${this.nextBatch.length}`);
+    this.logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     return this.getFlashSales();
   }
