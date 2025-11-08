@@ -319,8 +319,10 @@ export class FlashSalesService {
         `✅ Found ${eligibleProducts.length} eligible products (from ${products.length} total)`,
       );
 
-      // Shuffle and take 20 random products
-      const selectedProducts = this.shuffleArray(eligibleProducts).slice(0, 20);
+      // Shuffle and select products
+      // Target: 6 products, but will return whatever is available (1-6 products)
+      const targetCount = Math.min(6, eligibleProducts.length);
+      const selectedProducts = this.shuffleArray(eligibleProducts).slice(0, targetCount);
 
       const duration = Date.now() - startTime;
       this.logger.log(
