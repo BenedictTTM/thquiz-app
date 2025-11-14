@@ -1,0 +1,46 @@
+{
+  "name": "sellr-k6-load-tests",
+  "version": "1.0.0",
+  "description": "Enterprise-grade k6 load testing suite for Sellr Product API",
+  "scripts": {
+    "test:smoke": "k6 run --env TEST_TYPE=smoke k6-tests/product-api-load-tests.js",
+    "test:load": "k6 run --env TEST_TYPE=load k6-tests/product-api-load-tests.js",
+    "test:stress": "k6 run --env TEST_TYPE=stress k6-tests/product-api-load-tests.js",
+    "test:spike": "k6 run --env TEST_TYPE=spike k6-tests/product-api-load-tests.js",
+    "test:soak": "k6 run --env TEST_TYPE=soak k6-tests/product-api-load-tests.js",
+    "test:breakpoint": "k6 run --env TEST_TYPE=breakpoint k6-tests/product-api-load-tests.js",
+    "test:all": "npm run test:smoke && npm run test:load && npm run test:stress",
+    "test:quick": "npm run test:smoke",
+    "test:production": "k6 run --env BASE_URL=https://api.sellr.com --env TEST_TYPE=smoke k6-tests/product-api-load-tests.js",
+    "test:staging": "k6 run --env BASE_URL=https://staging.api.sellr.com --env TEST_TYPE=load k6-tests/product-api-load-tests.js",
+    "report:html": "k6-reporter k6-reports/results.json --output k6-reports/report.html",
+    "clean": "rm -rf k6-reports/*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BenedictTTM/Sellr-Backend.git"
+  },
+  "keywords": [
+    "k6",
+    "load-testing",
+    "performance",
+    "api-testing",
+    "sellr",
+    "product-api"
+  ],
+  "author": "Backend Engineering Team",
+  "license": "ISC",
+  "devDependencies": {
+    "k6": "latest"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "k6": ">=0.45.0"
+  },
+  "k6": {
+    "cloud": {
+      "projectID": "",
+      "name": "Sellr Product API Load Tests"
+    }
+  }
+}

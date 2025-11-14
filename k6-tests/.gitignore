@@ -1,0 +1,22 @@
+# k6 Test Results
+k6-reports/*.json
+k6-reports/*.html
+k6-reports/results_*.json
+
+# Keep the directory but ignore contents
+!k6-reports/.gitkeep
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
